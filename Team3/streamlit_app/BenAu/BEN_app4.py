@@ -19,6 +19,33 @@ T_CAT  = "jobs_categories"
 T_ENR  = "jobs_enriched"
 T_RAW  = "jobs_raw"   # only used if status not present in base/enriched
 
+# Desired order for Position Level (Violin + Box)
+POSITION_LEVEL_ORDER = [
+    "Fresh/entry level",
+    "Non-executive",
+    "Junior Executive",
+    "Executive",
+    "Senior Executive",
+    "Manager",
+    "Professional",
+    "Middle Management",
+    "Senior Management",
+]
+
+# Consistent color map for Position Level
+COLOR_MAP = {
+    "Fresh/entry level": "#4C78A8",
+    "Non-executive": "#F58518",
+    "Junior Executive": "#E45756",
+    "Executive": "#72B7B2",
+    "Senior Executive": "#54A24B",
+    "Manager": "#EECA3B",
+    "Professional": "#B279A2",
+    "Middle Management": "#FF9DA6",
+    "Senior Management": "#9D755D",
+}
+
+
 # --------------------------------------------------
 # DuckDB helpers
 # --------------------------------------------------
@@ -29,10 +56,13 @@ def get_con():
 def run_df(sql: str, params=None) -> pd.DataFrame:
     con = get_con()
     if params is not None:
-        # params should be a list/tuple in positional order
-        return con.execute(sql, params).df()
-    return con.execute(sql).df()
+        df = con.execute(sql, params).df()
+    else:
+        df = con.execute(sql).df()
 
+    # Normalize column names (prevents weird KeyErrors due to whitespace/casing)
+    df.columns = [str(c).strip() for c in df.columns]
+    return df
 
 @st.cache_data(ttl=1800)
 def get_table_cols(table: str) -> list[str]:
@@ -100,7 +130,7 @@ def build_plan():
     b_sal_max = pick_first(cols_b, ["salary_maximum", "salary_max"])
     b_status  = pick_first(cols_b, ["status_jobStatus", "status_job_status", "jobStatus", "job_status"])
 
-    # categories (assumed clean)
+    # categories
     c_primary = pick_first(cols_c, ["primary_category", "primaryCategory", "category", "category_name"])
 
     # enriched
@@ -114,6 +144,12 @@ def build_plan():
 
     # raw fallback status
     r_status = pick_first(cols_r, ["status_jobStatus", "status_job_status", "jobStatus", "job_status"]) if cols_r else None
+
+    # Ensure we can form employment_type + position_level from at least one table
+    if not (b_emp or e_emp):
+        raise RuntimeError("Cannot find employment type column in base or enriched.")
+    if not (b_level or e_level):
+        raise RuntimeError("Cannot find position level column in base or enriched.")
 
     return dict(
         b_key=b_key, c_key=c_key, e_key=e_key, r_key=r_key,
@@ -169,13 +205,13 @@ def joined_cte_sql(plan: dict) -> str:
     join_enr = f"LEFT JOIN {T_ENR} e ON b.{plan['b_key']} = e.{plan['e_key']}" if plan["e_key"] else ""
     join_cat = f"LEFT JOIN {T_CAT} c ON b.{plan['b_key']} = c.{plan['c_key']}" if plan["c_key"] else ""
 
-    # join raw only if needed for status
     join_raw = ""
     if not plan["b_status"] and not (plan["e_key"] and plan["e_status"]):
         if plan["r_key"] and plan["r_status"]:
             join_raw = f"LEFT JOIN {T_RAW} r ON b.{plan['b_key']} = r.{plan['r_key']}"
 
     salary_mid_expr = build_salary_mid_expr(plan)
+
     pos_expr = f"e.{plan['e_level']}" if (plan["e_key"] and plan["e_level"]) else f"b.{plan['b_level']}"
     emp_expr = f"e.{plan['e_emp']}" if (plan["e_key"] and plan["e_emp"]) else f"b.{plan['b_emp']}"
 
@@ -221,37 +257,29 @@ def joined_cte_sql(plan: dict) -> str:
 @st.cache_data(ttl=1800, show_spinner=True)
 def load_filter_values():
     plan = build_plan()
+    joined_sql = joined_cte_sql(plan)
 
-    pos_col = plan["b_level"] or plan["e_level"]
-    emp_col = plan["b_emp"] or plan["e_emp"]
-    if not pos_col or not emp_col:
-        raise RuntimeError("Missing position level / employment type columns.")
-
+    # Pull filter values from the joined CTE so "employment_type" definitely exists
     df_pe = run_df(
         f"""
+        {joined_sql}
         SELECT
-          array_agg(DISTINCT {pos_col} ORDER BY {pos_col}) AS position_levels,
-          array_agg(DISTINCT {emp_col} ORDER BY {emp_col}) AS employment_types
-        FROM {T_BASE}
+          array_agg(DISTINCT position_level ORDER BY position_level) AS position_levels,
+          array_agg(DISTINCT employment_type ORDER BY employment_type) AS employment_types,
+          array_agg(DISTINCT primary_category ORDER BY primary_category) AS categories
+        FROM joined
         """
     )
 
-    position_levels, employment_types = [], []
+    position_levels, employment_types, categories = [], [], []
     if not df_pe.empty:
         row = df_pe.iloc[0]
         position_levels = to_list_safe(row.get("position_levels"))
         employment_types = to_list_safe(row.get("employment_types"))
+        categories = to_list_safe(row.get("categories"))
 
-    categories = []
-    if plan["c_primary"]:
-        df_c = run_df(
-            f"""
-            SELECT array_agg(DISTINCT {plan['c_primary']} ORDER BY {plan['c_primary']}) AS categories
-            FROM {T_CAT}
-            """
-        )
-        if not df_c.empty:
-            categories = to_list_safe(df_c.iloc[0].get("categories"))
+    # Clean out NULL-ish categories if any
+    categories = [c for c in categories if c is not None and str(c).strip() != ""]
 
     return dict(
         position_levels=position_levels,
@@ -260,10 +288,6 @@ def load_filter_values():
         statuses=["Open", "Closed"],
     )
 
-# --------------------------------------------------
-# Detail sample + Heatmap agg (filters ONLY reference joined columns)
-# --------------------------------------------------
-
 def build_where_and_params(levels, cats, emps, status_groups):
     where = []
     params = []
@@ -271,15 +295,12 @@ def build_where_and_params(levels, cats, emps, status_groups):
     if levels:
         where.append("position_level = ANY(?)")
         params.append(levels)
-
     if cats:
         where.append("primary_category = ANY(?)")
         params.append(cats)
-
     if emps:
         where.append("employment_type = ANY(?)")
         params.append(emps)
-
     if status_groups:
         where.append("status_group = ANY(?)")
         params.append(status_groups)
@@ -287,14 +308,13 @@ def build_where_and_params(levels, cats, emps, status_groups):
     where_sql = " AND ".join(where) if where else "1=1"
     return where_sql, params
 
-
-
-
+# --------------------------------------------------
+# Detail sample (violin/box)
+# --------------------------------------------------
 @st.cache_data(ttl=300, show_spinner=True)
 def load_detail_sample(levels, cats, emps, status_groups, max_rows, debug_sql=False):
     plan = build_plan()
     joined_sql = joined_cte_sql(plan)
-
     where_sql, params = build_where_and_params(levels, cats, emps, status_groups)
 
     sql = f"""
@@ -311,21 +331,20 @@ def load_detail_sample(levels, cats, emps, status_groups, max_rows, debug_sql=Fa
     FROM filtered
     USING SAMPLE {int(max_rows)} ROWS
     """
-
     if debug_sql:
-        return pd.DataFrame({"sql":[sql], "params":[str(params)]})
-
+        return pd.DataFrame({"sql": [sql], "params": [str(params)]})
     return run_df(sql, params)
 
-
+# --------------------------------------------------
+# Heatmap agg (X=employment_type, Y=salary bins)
+# --------------------------------------------------
 @st.cache_data(ttl=300, show_spinner=True)
 def load_heatmap_agg(levels, cats, emps, status_groups, salary_cap_pct, nbinsy, debug_sql=False):
     plan = build_plan()
     joined_sql = joined_cte_sql(plan)
-
     where_sql, where_params = build_where_and_params(levels, cats, emps, status_groups)
 
-    # --- 1) compute cap (percentile) ---
+    # 1) compute cap
     cap_sql = f"""
     {joined_sql}
     SELECT quantile_cont(salary_mid, ?) AS cap
@@ -337,7 +356,7 @@ def load_heatmap_agg(levels, cats, emps, status_groups, salary_cap_pct, nbinsy, 
     cap_params = [float(salary_cap_pct)] + where_params
 
     if debug_sql:
-        return pd.DataFrame({"sql":[cap_sql], "params":[str(cap_params)]})
+        return pd.DataFrame({"sql": [cap_sql], "params": [str(cap_params)]})
 
     cap_df = run_df(cap_sql, cap_params)
     cap_val = cap_df.iloc[0]["cap"] if (not cap_df.empty) else None
@@ -345,7 +364,7 @@ def load_heatmap_agg(levels, cats, emps, status_groups, salary_cap_pct, nbinsy, 
     if cap_val is None or pd.isna(cap_val) or float(cap_val) <= 0:
         return pd.DataFrame(columns=["position_level", "bin_start", "cnt", "cap", "bin_size"])
 
-    # --- 2) binning ---
+    # 2) binning
     nbinsy = int(nbinsy)
     bin_size = max(float(cap_val) / nbinsy, 1.0)
 
@@ -373,13 +392,9 @@ def load_heatmap_agg(levels, cats, emps, status_groups, salary_cap_pct, nbinsy, 
     ORDER BY 1, 2
     """
 
-    # Order of params must match the ? placeholders:
-    # least(..., ?) -> cap_val
-    # floor(... / ?) -> bin_size
-    # * ? -> bin_size again
     agg_params = where_params + [float(cap_val), float(bin_size), float(bin_size)]
-
     out = run_df(agg_sql, agg_params)
+
     out["cap"] = float(cap_val)
     out["bin_size"] = float(bin_size)
     return out
@@ -400,8 +415,11 @@ with st.sidebar:
     show_sql = st.toggle("Show SQL (debug)", value=False)
 
     sel_levels = st.multiselect("Position Level", filters["position_levels"], default=filters["position_levels"])
-    sel_cats = st.multiselect("Primary Category", filters["categories"],
-                              default=default_primary_category(filters["categories"], "Banking and Finance"))
+    sel_cats = st.multiselect(
+        "Primary Category",
+        filters["categories"],
+        default=default_primary_category(filters["categories"], "Banking and Finance")
+    )
     sel_emp = st.multiselect("Employment Type", filters["employment_types"], default=[])
     sel_status = st.multiselect("Status", filters["statuses"], default=["Open"], help="Re-open is grouped under Open.")
 
@@ -412,7 +430,7 @@ with st.sidebar:
     heatmap_bins = st.slider("Heatmap bins (Y)", 10, 120, 50, 5)
 
 # --------------------------------------------------
-# Debug SQL output if requested
+# Debug SQL if requested
 # --------------------------------------------------
 if show_sql:
     st.subheader("SQL Debug")
@@ -430,97 +448,118 @@ heat_df = load_heatmap_agg(sel_levels, sel_cats, sel_emp, sel_status, salary_cap
 # Violin + Box
 # --------------------------------------------------
 st.subheader("📦 Salary Distributions")
+
 if detail_df.empty:
     st.info("No detail rows for current filters (sampled).")
 else:
     cap_detail = detail_df["salary_mid"].quantile(salary_cap_pct)
+    detail_df = detail_df.copy()
     detail_df["salary_mid_capped"] = detail_df["salary_mid"].clip(upper=cap_detail)
 
+    # force category order
+    detail_df = detail_df[detail_df["position_level"].isin(POSITION_LEVEL_ORDER)].copy()
+    detail_df["position_level"] = pd.Categorical(
+        detail_df["position_level"],
+        categories=POSITION_LEVEL_ORDER,
+        ordered=True
+    )
+
     st.markdown("### 🎻 Violin: Salary by Position Level")
-    fig_v = px.violin(detail_df, x="position_level", y="salary_mid_capped", box=True, points=False)
-    fig_v.update_layout(height=520)
+    fig_v = px.violin(
+        detail_df,
+        x="position_level",
+        y="salary_mid_capped",
+        color="position_level",
+        box=True,
+        points=False,
+        category_orders={"position_level": POSITION_LEVEL_ORDER},
+        color_discrete_map=COLOR_MAP,   # ✅ shared color map
+    )
+    fig_v.update_layout(height=520, showlegend=False)
     st.plotly_chart(fig_v, use_container_width=True)
 
     st.divider()
 
     st.markdown("### 📦 Box & Whisker: Salary by Position Level")
-    fig_b = px.box(detail_df, x="position_level", y="salary_mid_capped", points=False)
-    fig_b.update_layout(height=520)
+    fig_b = px.box(
+        detail_df,
+        x="position_level",
+        y="salary_mid_capped",
+        color="position_level",         # ✅ same grouping
+        category_orders={"position_level": POSITION_LEVEL_ORDER},
+        color_discrete_map=COLOR_MAP,   # ✅ same color map
+        points=False,
+    )
+    fig_b.update_layout(height=520, showlegend=False)
+
     st.plotly_chart(fig_b, use_container_width=True)
 
-## --------------------------------------------------
-# Heatmap + totals
+# --------------------------------------------------
+# Heatmap (continuous Y-axis aligned to violin scale)
 # --------------------------------------------------
 st.divider()
-st.subheader("🔥 Heatmap: Position Level vs Salary (Binned)")
+st.markdown("### 🔥 Heatmap: Position Level vs Salary (Continuous Scale)")
+st.caption("Y-axis aligned with violin salary scale (capped).")
 
 if heat_df.empty:
     st.info("No heatmap data for current filters.")
 else:
-    # --- pick dimension column (prefer position_level, fallback to employment_type) ---
-    dim_col = "position_level" if "position_level" in heat_df.columns else "employment_type"
-    if dim_col != "position_level":
-        st.warning(
-            "Heatmap is still using employment_type because heat_df does not contain position_level. "
-            "To truly switch, ensure load_heatmap_agg returns position_level."
+    required = {"position_level", "bin_start", "cnt", "cap", "bin_size"}
+    missing = required - set(heat_df.columns)
+
+    if missing:
+        st.error(f"Heatmap output missing columns: {missing}. Got: {list(heat_df.columns)}")
+        st.dataframe(heat_df.head(50), use_container_width=True)
+    else:
+        bin_size = float(heat_df["bin_size"].iloc[0])
+        cap_val  = float(heat_df["cap"].iloc[0])
+
+        heat_df = heat_df.copy()
+        heat_df["bin_mid"] = heat_df["bin_start"] + bin_size / 2
+
+       # Force exact master order (even if some levels have zero rows)
+        heat_df["position_level"] = pd.Categorical(
+        heat_df["position_level"],
+            categories=POSITION_LEVEL_ORDER,
+            ordered=True
         )
 
-    bin_size = float(heat_df["bin_size"].iloc[0])
-    cap_val = float(heat_df["cap"].iloc[0])
+        # Optional: drop levels that truly do not exist after filtering
+        heat_df = heat_df.sort_values("position_level")
 
-    heat_df = heat_df.copy()
-    heat_df["bin_end"] = heat_df["bin_start"] + bin_size
-    heat_df["salary_bin"] = heat_df.apply(
-        lambda r: f"{r['bin_start']:,.0f}–{min(r['bin_end'], cap_val):,.0f}",
-        axis=1
-    )
+        fig_heat = px.density_heatmap(
+            heat_df,
+            x="position_level",
+            y="bin_mid",
+            z="cnt",
+            histfunc="sum"
+        )
+        fig_heat.update_layout(
+            height=620,
+            xaxis_title="Position Level",
+            yaxis_title=f"Salary (capped at {cap_val:,.0f})",
+        )
+        fig_heat.update_yaxes(range=[0, cap_val], tickformat=",.0f")
+        st.plotly_chart(fig_heat, use_container_width=True)
 
-    # --- order dimension by total count (descending) ---
-    dim_order = (
-        heat_df.groupby(dim_col)["cnt"]
-        .sum()
-        .sort_values(ascending=False)
-        .index
-        .tolist()
-    )
+        # Totals table + TOTAL row
+        st.markdown("### 📊 Total Job Count by Position Level (Heatmap Basis)")
+        totals_df = (
+            heat_df.groupby("position_level", observed=True)["cnt"]
+            .sum()
+            .reset_index(name="job_count")
+            .sort_values("position_level")
+        )
+        grand_total = int(totals_df["job_count"].sum()) if not totals_df.empty else 0
+        totals_df["percentage"] = (totals_df["job_count"] / grand_total * 100).round(1) if grand_total else 0.0
 
-    # --- order salary bins by bin_start (ascending) ---
-    bin_order = (
-        heat_df.sort_values("bin_start")["salary_bin"]
-        .drop_duplicates()
-        .tolist()
-    )
+        totals_df = pd.concat(
+            [totals_df, pd.DataFrame([{
+                "position_level": "TOTAL",
+                "job_count": grand_total,
+                "percentage": 100.0 if grand_total else 0.0
+            }])],
+            ignore_index=True
+        )
+        st.dataframe(totals_df, use_container_width=True, hide_index=True)
 
-    heat_df[dim_col] = pd.Categorical(heat_df[dim_col], categories=dim_order, ordered=True)
-    heat_df["salary_bin"] = pd.Categorical(heat_df["salary_bin"], categories=bin_order, ordered=True)
-
-    # --- heatmap plot ---
-    fig_h = px.density_heatmap(
-        heat_df,
-        x=dim_col,
-        y="salary_bin",
-        z="cnt",
-        histfunc="sum"
-    )
-    fig_h.update_layout(height=620)
-    st.plotly_chart(fig_h, use_container_width=True)
-
-    # --- totals table ---
-    st.markdown(f"### 📊 Total Job Count by {dim_col.replace('_', ' ').title()} (Heatmap Basis)")
-    totals_df = (
-        heat_df.groupby(dim_col, observed=True)["cnt"]
-        .sum()
-        .reset_index(name="job_count")
-        .sort_values("job_count", ascending=False)
-    )
-
-    grand_total = int(totals_df["job_count"].sum()) if not totals_df.empty else 0
-    if grand_total > 0:
-        totals_df["percentage"] = (totals_df["job_count"] / grand_total * 100).round(1)
-    else:
-        totals_df["percentage"] = 0.0
-
-    total_row = {dim_col: "TOTAL", "job_count": grand_total, "percentage": 100.0 if grand_total > 0 else 0.0}
-    totals_df = pd.concat([totals_df, pd.DataFrame([total_row])], ignore_index=True)
-
-    st.dataframe(totals_df, use_container_width=True, hide_index=True)
