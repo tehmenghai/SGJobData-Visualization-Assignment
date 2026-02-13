@@ -120,7 +120,7 @@ def main():
                      text='job_count')
         fig.update_traces(textposition='outside')
         fig.update_xaxes(tickangle=-45)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     with right:
         st.subheader("Top Company Details")
@@ -134,7 +134,7 @@ def main():
                     "unique_roles": "Roles",
                     "category_count": "Categories",
                 },
-                width="stretch",
+                use_container_width=True,
             )
         else:
             st.info("No companies found for the selected threshold")
@@ -172,7 +172,7 @@ def main():
         hiring_pattern['month'] = hiring_pattern['posting_year'].astype(str) + '-' + hiring_pattern['posting_month'].astype(str).str.zfill(2)
         pivot_data = hiring_pattern.pivot_table(index='company_name', columns='month', values='job_count', fill_value=0)
         fig2 = px.imshow(pivot_data, title=f'Top 10 Companies - Hiring Activity Heatmap (Max {max_categories} Categories)', labels={'x': 'Month', 'y': 'Company'}, color_continuous_scale='YlOrRd')
-        st.plotly_chart(fig2, width="stretch")
+        st.plotly_chart(fig2, use_container_width=True)
     else:
         st.info("No hiring pattern data available for the selected threshold")
 
@@ -268,7 +268,7 @@ def main():
             yaxis_tickprefix="$",
         )
         fig3.update_yaxes(dtick=5000, tickformat=",.0f")
-        st.plotly_chart(fig3, width="stretch")
+        st.plotly_chart(fig3, use_container_width=True)
 
         st.caption("Quick Sort Table")
         table_df = category_company_bubbles.copy()
@@ -286,7 +286,7 @@ def main():
                 "company_name": "Company",
                 "median_salary_display": st.column_config.TextColumn("Median Salary"),
             },
-            width="stretch",
+            use_container_width=True,
         )
     else:
         st.info("No salary/category data available for the selected profile and threshold")

@@ -35,6 +35,42 @@ def get_db_connection():
 
 con = get_db_connection()
 
+
+@st.cache_data(ttl=3600)
+def get_industries():
+    return get_db_connection().execute("SELECT DISTINCT category_name FROM jobs_categories ORDER BY 1").fetchdf()['category_name'].tolist()
+
+
+@st.cache_data(ttl=3600)
+def get_experience_bands():
+    return get_db_connection().execute("""
+        SELECT DISTINCT experience_band FROM jobs_enriched
+        WHERE experience_band IS NOT NULL
+        ORDER BY CASE
+            WHEN experience_band LIKE 'Entry%' THEN 1
+            WHEN experience_band LIKE 'Mid%' THEN 2
+            WHEN experience_band LIKE 'Senior%' THEN 3
+            WHEN experience_band LIKE 'Executive%' THEN 4
+            ELSE 5 END
+    """).fetchdf()['experience_band'].tolist()
+
+
+@st.cache_data(ttl=300)
+def run_gems_query(where_clause, max_comp_limit, result_limit):
+    return get_db_connection().execute(f"""
+        SELECT
+            je.title as job_title, je.company_name, je.avg_salary, je.salary_minimum, je.salary_maximum,
+            je.applications, je.views, je.days_active, jc.category_name as primary_category,
+            (CAST(je.applications AS FLOAT) * 100.0 / NULLIF(CAST(je.views AS FLOAT), 0)) as competition_ratio
+        FROM jobs_enriched je
+        JOIN jobs_categories jc ON je.job_id = jc.job_id
+        WHERE {where_clause}
+        AND competition_ratio <= {max_comp_limit}
+        ORDER BY je.avg_salary DESC
+        LIMIT {result_limit}
+    """).fetchdf()
+
+
 # --- 2. SIDEBAR: FILTERS & SETTINGS ---
 st.sidebar.markdown("# 🥬 Fresh!")
 with st.sidebar.expander("Timing is Everything", expanded=True):
@@ -42,20 +78,10 @@ with st.sidebar.expander("Timing is Everything", expanded=True):
 
 st.sidebar.markdown("# 🔍 Hunt")
 with st.sidebar.expander("💼 Career Match", expanded=True):
-    industries = con.execute("SELECT DISTINCT category_name FROM jobs_categories ORDER BY 1").fetchdf()['category_name'].tolist()
+    industries = get_industries()
     selected_ind = st.selectbox("Industry Category", options=["All Categories"] + industries)
 
-    exp_query = """
-    SELECT DISTINCT experience_band FROM jobs_enriched 
-    WHERE experience_band IS NOT NULL
-    ORDER BY CASE 
-        WHEN experience_band LIKE 'Entry%' THEN 1
-        WHEN experience_band LIKE 'Mid%' THEN 2
-        WHEN experience_band LIKE 'Senior%' THEN 3
-        WHEN experience_band LIKE 'Executive%' THEN 4
-        ELSE 5 END
-    """
-    exp_bands = con.execute(exp_query).fetchdf()['experience_band'].tolist()
+    exp_bands = get_experience_bands()
     selected_exp = st.selectbox("Experience Band", options=["All Levels"] + exp_bands)
 
 st.sidebar.markdown("---")
@@ -81,20 +107,7 @@ if selected_ind != "All Categories":
 
 where_clause = " AND ".join(filters)
 
-query = f"""
-SELECT 
-    je.title as job_title, je.company_name, je.avg_salary, je.salary_minimum, je.salary_maximum,
-    je.applications, je.views, je.days_active, jc.category_name as primary_category,
-    (CAST(je.applications AS FLOAT) * 100.0 / NULLIF(CAST(je.views AS FLOAT), 0)) as competition_ratio
-FROM jobs_enriched je
-JOIN jobs_categories jc ON je.job_id = jc.job_id
-WHERE {where_clause}
-AND competition_ratio <= {max_comp_limit}
-ORDER BY je.avg_salary DESC
-LIMIT {result_limit}
-"""
-
-df_gems = con.execute(query).fetchdf()
+df_gems = run_gems_query(where_clause, max_comp_limit, result_limit)
 
 # --- 5. VISUALIZATION ---
 if not df_gems.empty:
