@@ -12,8 +12,8 @@ st.title("Kendra Lai's Dashboard")
 #st.info("This dashboard is under development. Check back soon!")
 
 
-  # Load your data using relative path
-DATA_PATH = Path("KendraLai/data/").parent.parent / "KendraLai" / "data" / "jobs_cleaned.parquet"
+# Load your data using relative path
+DATA_PATH = Path(__file__).parent.parent / "KendraLai" / "data" / "jobs_cleaned.parquet"
 df = pd.read_parquet(DATA_PATH)
 
 #st.title("Kendra Lai's Dashboard")

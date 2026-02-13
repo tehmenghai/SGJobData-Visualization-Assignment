@@ -153,7 +153,7 @@ with col1:
     """,
         unsafe_allow_html=True,
     )
-    st.page_link("pages/2_Salary_Explorer_(Meng_Hai).py", label="Open Salary Explorer", icon="📊")
+    st.page_link("pages/2_Salary_Explorer.py", label="Open Salary Explorer", icon="📊")
 
 with col2:
     st.markdown(
@@ -174,7 +174,7 @@ with col2:
     """,
         unsafe_allow_html=True,
     )
-    st.page_link("pages/3_Job_Concierge_(Lik_Hong).py", label="Open Job Concierge", icon="🎯")
+    st.page_link("pages/3_Job_Concierge.py", label="Open Job Concierge", icon="🎯")
 
 # Row 2 — coming soon
 col3, col4 = st.columns(2)
@@ -197,7 +197,7 @@ with col3:
     """,
         unsafe_allow_html=True,
     )
-    st.page_link("pages/4_Job_Market_Insights_(Ben_Au).py", label="Open Job Market Insights", icon="📈")
+    st.page_link("pages/4_Job_Market_Insights.py", label="Open Job Market Insights", icon="📈")
 
 with col4:
     st.markdown(
@@ -216,7 +216,7 @@ with col4:
     """,
         unsafe_allow_html=True,
     )
-    st.page_link("pages/5_Top_Companies_(Huey_Ling).py", label="Open Top Companies", icon="🏢")
+    st.page_link("pages/5_Top_Companies.py", label="Open Top Companies", icon="🏢")
 
 col5, col6 = st.columns(2)
 
@@ -224,33 +224,41 @@ with col5:
     st.markdown(
         """
     <div class="card">
-        <div class="card-title">Dashboard 5</div>
+        <div class="card-title">Repost & Company Analytics</div>
         <div class="card-author">by Kendra Lai</div>
         <div class="card-desc">
-            Coming soon — Kendra's visualization will appear here once ready.
-            Check the sidebar for updates.
+            Analyzes top hiring companies by post volume, repost patterns,
+            and duplicate rates. Breakdown by position level reveals which
+            companies actively repost and where title duplication occurs.
         </div>
-        <span class="badge badge-amber">Coming Soon</span>
+        <span class="badge badge-blue">Top Companies</span>
+        <span class="badge badge-green">Repost Analysis</span>
+        <span class="badge badge-amber">Duplicate Rates</span>
     </div>
     """,
         unsafe_allow_html=True,
     )
+    st.page_link("pages/6_Repost_Analytics.py", label="Open Repost Analytics", icon="📋")
 
 with col6:
     st.markdown(
         """
     <div class="card">
-        <div class="card-title">Dashboard 6</div>
+        <div class="card-title">Gems Explorer</div>
         <div class="card-author">by Lanson</div>
         <div class="card-desc">
-            Coming soon — Lanson's visualization will appear here once ready.
-            Check the sidebar for updates.
+            Discover hidden job gems with low competition and high visibility.
+            Classifies jobs as Niche Gems, First Movers, or Standard leads
+            using competition ratio and exposure metrics.
         </div>
-        <span class="badge badge-amber">Coming Soon</span>
+        <span class="badge badge-purple">Gem Finder</span>
+        <span class="badge badge-blue">Competition Analysis</span>
+        <span class="badge badge-green">Strategic Leads</span>
     </div>
     """,
         unsafe_allow_html=True,
     )
+    st.page_link("pages/1_Gems_Explorer.py", label="Open Gems Explorer", icon="💎")
 
 # ── Team Section ─────────────────────────────────────────────────────────────
 st.markdown(
@@ -265,8 +273,8 @@ st.markdown(
 team = [
     ("Ben Au", "Job Market Insights"),
     ("Huey Ling", "Top Hiring Companies"),
-    ("Kendra Lai", "Dashboard 5"),
-    ("Lanson", "Dashboard 6"),
+    ("Kendra Lai", "Repost & Company Analytics"),
+    ("Lanson", "Gems Explorer"),
     ("Lik Hong", "Job Concierge"),
     ("Meng Hai", "Salary Explorer"),
 ]
