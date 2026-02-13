@@ -133,7 +133,7 @@ st.divider()
 st.markdown("### Dashboards")
 st.caption("Select a dashboard from the sidebar, or click the links below to explore.")
 
-# Row 1 — available dashboards
+# Row 1
 col1, col2 = st.columns(2)
 
 with col1:
@@ -155,30 +155,28 @@ with col1:
     """,
         unsafe_allow_html=True,
     )
-    st.page_link("pages/2_Salary_Explorer.py", label="Open Salary Explorer", icon="📊")
+    st.page_link("pages/1_Salary_Explorer.py", label="Open Salary Explorer", icon="📊")
 
 with col2:
     st.markdown(
         """
     <div class="card">
-        <div class="card-title">Job Concierge</div>
-        <div class="card-author">by Lik Hong</div>
+        <div class="card-title">Top Hiring Companies</div>
+        <div class="card-author">by Huey Ling</div>
         <div class="card-desc">
-            AI-powered personal job recommendation engine.
-            Set your profile (experience, salary, industry) and get
-            multi-dimensional match scores across 5 factors.
-            Features radar charts, scatter analysis, and ranked job cards.
+            Explore the most active employers, hiring patterns by month,
+            and a salary-focused bubble chart across top categories.
         </div>
-        <span class="badge badge-purple">AI Matching</span>
-        <span class="badge badge-blue">Radar Charts</span>
-        <span class="badge badge-green">Job Scoring</span>
+        <span class="badge badge-blue">Top Companies</span>
+        <span class="badge badge-green">Hiring Trends</span>
+        <span class="badge badge-amber">Salary Focus</span>
     </div>
     """,
         unsafe_allow_html=True,
     )
-    st.page_link("pages/3_Job_Concierge.py", label="Open Job Concierge", icon="🎯")
+    st.page_link("pages/2_Top_Companies.py", label="Open Top Companies", icon="🏢")
 
-# Row 2 — coming soon
+# Row 2
 col3, col4 = st.columns(2)
 
 with col3:
@@ -199,30 +197,9 @@ with col3:
     """,
         unsafe_allow_html=True,
     )
-    st.page_link("pages/4_Job_Market_Insights.py", label="Open Job Market Insights", icon="📈")
+    st.page_link("pages/3_Job_Market_Insights.py", label="Open Job Market Insights", icon="📈")
 
 with col4:
-    st.markdown(
-        """
-    <div class="card">
-        <div class="card-title">Top Hiring Companies</div>
-        <div class="card-author">by Huey Ling</div>
-        <div class="card-desc">
-            Explore the most active employers, hiring patterns by month,
-            and a salary-focused bubble chart across top categories.
-        </div>
-        <span class="badge badge-blue">Top Companies</span>
-        <span class="badge badge-green">Hiring Trends</span>
-        <span class="badge badge-amber">Salary Focus</span>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
-    st.page_link("pages/5_Top_Companies.py", label="Open Top Companies", icon="🏢")
-
-col5, col6 = st.columns(2)
-
-with col5:
     st.markdown(
         """
     <div class="card">
@@ -240,13 +217,16 @@ with col5:
     """,
         unsafe_allow_html=True,
     )
-    st.page_link("pages/6_Repost_Analytics.py", label="Open Repost Analytics", icon="📋")
+    st.page_link("pages/4_Repost_Analytics.py", label="Open Repost Analytics", icon="📋")
 
-with col6:
+# Row 3
+col5, col6 = st.columns(2)
+
+with col5:
     st.markdown(
         """
     <div class="card">
-        <div class="card-title">Gems Explorer</div>
+        <div class="card-title">Hidden Gems</div>
         <div class="card-author">by Lanson</div>
         <div class="card-desc">
             Discover hidden job gems with low competition and high visibility.
@@ -260,7 +240,28 @@ with col6:
     """,
         unsafe_allow_html=True,
     )
-    st.page_link("pages/1_Gems_Explorer.py", label="Open Gems Explorer", icon="💎")
+    st.page_link("pages/5_Hidden_Gems.py", label="Open Hidden Gems", icon="💎")
+
+with col6:
+    st.markdown(
+        """
+    <div class="card">
+        <div class="card-title">My Job Concierge</div>
+        <div class="card-author">by Lik Hong</div>
+        <div class="card-desc">
+            AI-powered personal job recommendation engine.
+            Set your profile (experience, salary, industry) and get
+            multi-dimensional match scores across 5 factors.
+            Features radar charts, scatter analysis, and ranked job cards.
+        </div>
+        <span class="badge badge-purple">AI Matching</span>
+        <span class="badge badge-blue">Radar Charts</span>
+        <span class="badge badge-green">Job Scoring</span>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+    st.page_link("pages/6_My_Job_Concierge.py", label="Open My Job Concierge", icon="🎯")
 
 # ── Team Section ─────────────────────────────────────────────────────────────
 st.markdown(
@@ -273,12 +274,12 @@ st.markdown(
 )
 
 team = [
-    ("Ben Au", "Job Market Insights"),
-    ("Huey Ling", "Top Hiring Companies"),
-    ("Kendra Lai", "Repost & Company Analytics"),
-    ("Lanson", "Gems Explorer"),
-    ("Lik Hong", "Job Concierge"),
     ("Meng Hai", "Salary Explorer"),
+    ("Huey Ling", "Top Companies"),
+    ("Ben Au", "Job Market Insights"),
+    ("Kendra Lai", "Repost Analytics"),
+    ("Lanson", "Hidden Gems"),
+    ("Lik Hong", "My Job Concierge"),
 ]
 
 cols = st.columns(len(team))
