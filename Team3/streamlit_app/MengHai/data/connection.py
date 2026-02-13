@@ -25,8 +25,9 @@ def get_connection():
     return conn
 
 
+@st.cache_data(ttl=600)
 def execute_query(query: str, params: dict = None) -> pd.DataFrame:
-    """Execute a query and return results as DataFrame."""
+    """Execute a query and return results as DataFrame (cached 10 min)."""
     conn = get_connection()
     try:
         result = conn.execute(query).fetchdf()
@@ -36,7 +37,8 @@ def execute_query(query: str, params: dict = None) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def get_company_categories(companies: list) -> pd.DataFrame:
+@st.cache_data(ttl=3600)
+def get_company_categories(companies: tuple) -> pd.DataFrame:
     """Get categories for selected companies with job counts."""
     if not companies:
         return pd.DataFrame()
@@ -56,6 +58,7 @@ def get_company_categories(companies: list) -> pd.DataFrame:
     return result
 
 
+@st.cache_data(ttl=600)
 def search_companies(search_term: str, limit: int = 50) -> list:
     """Search for companies matching the search term."""
     conn = get_connection()
@@ -70,6 +73,7 @@ def search_companies(search_term: str, limit: int = 50) -> list:
     return result["company_name"].tolist() if not result.empty else []
 
 
+@st.cache_data(ttl=3600)
 def get_filter_options():
     """Get all filter options from the database."""
     conn = get_connection()
