@@ -1,0 +1,49 @@
+/* Minimal styling - let Streamlit handle light/dark mode */
+
+/* Metric cards - subtle shadow only */
+[data-testid="stMetric"] {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+/* Metric value color */
+[data-testid="stMetricValue"] {
+    color: #2563EB !important;
+    font-weight: 600;
+}
+
+/* Button styling */
+.stButton > button {
+    border-radius: 0.375rem;
+    font-weight: 500;
+}
+
+/* Multiselect tags - high contrast selected pills */
+.stMultiSelect [data-baseweb="tag"] {
+    background-color: #2563EB !important;
+    color: #FFFFFF !important;
+    border-radius: 0.375rem;
+    font-weight: 500;
+}
+
+/* Tag text and close icon in white */
+.stMultiSelect [data-baseweb="tag"] span,
+.stMultiSelect [data-baseweb="tag"] [data-baseweb="tag"] > span:first-child {
+    color: #FFFFFF !important;
+}
+
+.stMultiSelect [data-baseweb="tag"] svg {
+    fill: rgba(255, 255, 255, 0.8) !important;
+}
+
+.stMultiSelect [data-baseweb="tag"] svg:hover {
+    fill: #FFFFFF !important;
+}
+
+/* Chart container - subtle border */
+[data-testid="stPlotlyChart"] {
+    border-radius: 0.5rem;
+    border: 1px solid rgba(128, 128, 128, 0.2);
+    padding: 0.5rem;
+}
