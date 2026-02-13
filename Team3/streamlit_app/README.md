@@ -2,7 +2,7 @@
 
 ## Overview
 
-Each team member builds their own visualization in their individual folder. A final `main.py` compiles all members' work into a single tabbed dashboard — no copy-pasting or merging required.
+Each team member builds their own dashboard as a **separate page** in a multi-page Streamlit app. The `main.py` serves as a landing page with an overview and links to each member's dashboard. Each dashboard appears in the sidebar for easy navigation.
 
 ---
 
@@ -10,86 +10,53 @@ Each team member builds their own visualization in their individual folder. A fi
 
 ```
 streamlit_app/
-├── main.py                  # Final compiled app (auto-loads all members)
-├── shared/
-│   └── data.py              # Shared data loader (DuckDB connection + views)
-├── BenAu/
-│   └── app.py               # Ben's visualization
-├── HueyLing/
-│   └── app.py               # HueyLing's visualization
-├── KendraLai/
-│   └── app.py               # Kendra's visualization
-├── Lanson/
-│   └── app.py               # Lanson's visualization
-├── LikHong/
-│   └── app.py               # LikHong's visualization
-└── MengHai/
-    └── app.py               # MengHai's visualization
+├── main.py                                      # Landing page (run this)
+├── pages/
+│   ├── 1_Dashboard_(Lanson).py                  # Lanson's dashboard
+│   ├── 2_Salary_Explorer_(Meng_Hai).py          # Meng Hai's dashboard
+│   ├── 3_Job_Concierge_(Lik_Hong).py            # Lik Hong's dashboard
+│   ├── 4_Job_Market_Insights_(Ben_Au).py        # Ben Au's dashboard
+│   ├── 5_Top_Companies_(Huey_Ling).py           # Huey Ling's dashboard
+│   └── 6_Dashboard_(Kendra_Lai).py              # Kendra Lai's dashboard
+├── BenAu/                                       # Ben Au's working folder
+├── HueyLing/                                    # Huey Ling's working folder
+├── KendraLai/                                   # Kendra Lai's working folder
+├── Lanson/                                      # Lanson's working folder
+├── LikHong/                                     # Lik Hong's working folder
+└── MengHai/                                     # Meng Hai's working folder
 ```
 
 ---
 
 ## How It Works
 
-### 1. Shared Data Loader (`shared/data.py`)
+### 1. Multi-Page Architecture
 
-Loads data once and provides a DuckDB connection with all views ready:
-- `jobs_base` — normalized salary, application rate, dates
-- `jobs_enriched` — salary bands, experience bands, time dimensions
-- `jobs_categories` — flattened category rows
+Streamlit's **multi-page app** feature automatically picks up any `.py` file in the `pages/` folder and adds it to the sidebar. Each page runs independently with its own layout, filters, and charts.
 
-All members query the **same connection** so data is consistent.
+### 2. Landing Page (`main.py`)
 
-### 2. Each Member's App (`{Name}/app.py`)
+- Displays database stats (total jobs, companies, categories, date range)
+- Shows dashboard cards for each team member with descriptions
+- Links to each member's page
 
-Every member creates an `app.py` in their folder that follows this contract:
+### 3. Each Member's Page (`pages/{N}_{Name}.py`)
 
-```python
-import streamlit as st
+Each member has a dedicated page file in `pages/`. You can either:
 
-def render(con):
-    """
-    Main visualization function.
+- **Write your code directly** in the page file, or
+- **Build in your own folder** (e.g., `KendraLai/app.py`) and have the page file import it
 
-    Parameters:
-        con: DuckDB connection with jobs_base, jobs_enriched,
-             jobs_categories views already available.
-    """
-    # --- YOUR FILTERS (inside your tab) ---
-    col1, col2 = st.columns(2)
-    with col1:
-        category = st.selectbox("Category", [...], key="yourname_category")
-    with col2:
-        exp_band = st.selectbox("Experience", [...], key="yourname_exp")
+### Database Connection
 
-    # --- YOUR CHARTS ---
-    df = con.execute("SELECT ... FROM jobs_enriched WHERE ...").fetchdf()
-    st.bar_chart(df)
-
-
-# Standalone mode — for individual development/testing
-if __name__ == "__page__" or __name__ == "__main__":
-    import sys, os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-    from shared.data import get_connection
-
-    st.set_page_config(page_title="My Visualization", layout="wide")
-    con = get_connection()
-    render(con)
-```
-
-### 3. Final Compiled App (`main.py`)
-
-Imports each member's `render()` function and presents them as tabs:
+Connect to the database using a relative path from your page file:
 
 ```python
-tabs = st.tabs(["BenAu", "HueyLing", "KendraLai", "Lanson", "LikHong", "MengHai"])
+from pathlib import Path
+import duckdb
 
-with tabs[0]:
-    BenAu.app.render(con)
-with tabs[1]:
-    HueyLing.app.render(con)
-# ... etc
+DB_PATH = Path(__file__).parent.parent.parent / "data" / "raw" / "SGJobData.db"
+con = duckdb.connect(str(DB_PATH), read_only=True)
 ```
 
 ---
@@ -98,44 +65,34 @@ with tabs[1]:
 
 ### Must Follow
 
-1. **Put your code in `{YourName}/app.py`** — do not modify other members' folders.
+1. **Work in your own folder** (`{YourName}/`) and your own page file in `pages/` — do not modify other members' files.
 
-2. **Export a `render(con)` function** — this is the only function `main.py` calls.
-
-3. **Prefix all widget keys with your name** to avoid collisions across tabs:
+2. **Use relative paths** for the database — do not hardcode absolute paths like `/home/user/...`:
    ```python
    # GOOD
-   st.selectbox("Category", options, key="menghai_category")
-   st.slider("Salary", 0, 20000, key="menghai_salary")
+   DB_PATH = Path(__file__).parent.parent.parent / "data" / "raw" / "SGJobData.db"
 
-   # BAD — will crash when two members use the same key
-   st.selectbox("Category", options, key="category")
+   # BAD — won't work on other machines
+   DB_PATH = "/home/myuser/SGJobData-Visualization-Assignment/Team3/data/raw/SGJobData.db"
    ```
 
-4. **Put your filters inside your tab**, not in `st.sidebar`. Each member's filters live within their own tab content area so switching tabs shows the right filters:
+3. **Set page config** at the top of your page file:
    ```python
-   def render(con):
-       # Filters at the top of your section
-       col1, col2, col3 = st.columns(3)
-       with col1:
-           category = st.selectbox("Category", [...], key="yourname_cat")
-
-       # Charts below
-       st.plotly_chart(fig)
+   st.set_page_config(page_title="Your Dashboard Title", page_icon="📊", layout="wide")
    ```
+
+4. **Use `st.cache_resource`** for database connections and `st.cache_data` for queries to avoid re-running on every interaction.
 
 ### Recommended
 
-- Use `st.columns()` for a horizontal filter bar at the top of your section.
-- Use `st.expander("Filters")` if you have many filter controls to keep it tidy.
-- Query from views (`jobs_enriched`, `jobs_categories`) rather than raw tables.
+- Use `st.sidebar` for filters — each page has its own sidebar context.
+- Query from `jobs_enriched` and `jobs_categories` tables rather than raw tables.
 - Cap salary at $50K in visualizations to handle outliers (consistent with EDA findings).
+- Use Plotly (`plotly.express`) for interactive charts.
 
 ---
 
-## Available Views to Query
-
-All views are provided via the `con` DuckDB connection.
+## Available Tables to Query
 
 ### `jobs_enriched` (1 row per job posting)
 
@@ -151,6 +108,8 @@ All views are provided via the `con` DuckDB connection.
 | `salary_band` | VARCHAR | < 3K, 3K-5K, 5K-8K, 8K-12K, 12K-20K, 20K+ |
 | `min_experience` | BIGINT | Minimum years of experience required |
 | `experience_band` | VARCHAR | Entry (0-2), Mid (3-5), Senior (6-10), Executive (10+) |
+| `position_level` | VARCHAR | Fresh/entry level, Executive, Manager, etc. |
+| `employment_type` | VARCHAR | Full Time, Part Time, Contract, etc. |
 | `vacancies` | BIGINT | Number of vacancies |
 | `job_status` | VARCHAR | Open / Closed |
 | `posting_date` | DATE | Original posting date |
@@ -165,7 +124,7 @@ All views are provided via the `con` DuckDB connection.
 | `application_rate` | FLOAT | applications / views |
 | `categories` | VARCHAR | Raw JSON categories array |
 
-### `jobs_categories` (1 row per job-category pair, ~1.7M rows)
+### `jobs_categories` (1 row per job-category pair)
 
 Includes all columns from `jobs_enriched` plus:
 
@@ -208,40 +167,50 @@ ORDER BY avg_salary DESC
 
 ## Development Workflow
 
-### Individual Development
+### Running the Full App
 
 ```bash
-# From your folder (e.g., streamlit_app/MengHai/)
-cd streamlit_app/MengHai
-streamlit run app.py
-```
-
-Your app runs standalone — you can iterate on your charts and filters independently.
-
-### Running the Compiled App
-
-```bash
-# From streamlit_app/
-cd streamlit_app
+cd Team3/streamlit_app
 streamlit run main.py
 ```
 
-This loads all team members' tabs into a single dashboard.
+The app opens at **http://localhost:8501**. All dashboards appear in the sidebar.
+
+### Running Your Dashboard Standalone
+
+You can run your own page file or folder app independently:
+
+```bash
+# Run your page file directly
+streamlit run pages/1_Dashboard_\(Lanson\).py
+
+# Or run from your folder
+cd Team3/streamlit_app/Lanson
+streamlit run app.py
+```
 
 ### Git Workflow
 
-1. Work only in your own folder (`streamlit_app/{YourName}/`).
-2. Do not modify `shared/data.py` or other members' folders without discussion.
-3. Commit and push your own `app.py` when ready.
-4. The `main.py` auto-imports all members — no merge step needed.
+1. **Fork** the main repo on GitHub, or ask to be added as a collaborator.
+2. Work in your own folder (`streamlit_app/{YourName}/`) and your page file.
+3. Commit and push to your fork.
+4. Create a **Pull Request** to merge into the main repo.
 
 ---
 
-## Checklist Before Final Submission
+## Adding Your Dashboard
 
-- [ ] Your `app.py` has a `render(con)` function
-- [ ] All widget keys are prefixed with your name
-- [ ] Filters are inside your tab (not in `st.sidebar`)
-- [ ] Your app runs standalone (`streamlit run app.py`)
-- [ ] Your app runs in the compiled view (`streamlit run main.py`)
-- [ ] No hardcoded file paths — all data comes from the `con` parameter
+1. Build your dashboard in your own folder (e.g., `Lanson/app.py`)
+2. Update your page file in `pages/` (e.g., `1_Dashboard_(Lanson).py`) to either contain your dashboard code or import from your folder
+3. Use relative paths for the database connection
+4. Test by running `streamlit run main.py` from `Team3/streamlit_app/`
+
+---
+
+## Checklist Before Submission
+
+- [ ] Your dashboard runs without errors
+- [ ] Database path uses relative `Path(__file__)`, not hardcoded absolute paths
+- [ ] Your page appears correctly in the sidebar when running `main.py`
+- [ ] No modifications to other members' files
+- [ ] Code is committed and pushed via Pull Request
